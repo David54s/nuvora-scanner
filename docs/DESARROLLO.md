@@ -45,6 +45,7 @@ El mínimo de API 24 lo impone el plugin de cámara (CameraX) junto con el míni
 - La perspectiva de la foto deforma las proporciones, así que la app **estima la proporción real de la hoja** a partir de sus 4 esquinas (método de Zhang y He; la distancia focal se estima del propio cuadrilátero).
 - En modo **Auto** ajusta la página a **Carta** (21.6 × 27.9 cm) u **Oficio** (21.6 × 34 cm, la medida mexicana), la más cercana. Lo que no se parece a ninguno (recibos, credenciales) se deja como está.
 - Si la hoja se sale de la foto, Auto solo ajusta cuando lo visible ya está a menos del 5 % de Carta u Oficio, para no deformarla de más.
+- **El documento no se deforma.** Si su proporción real difiere del papel en más de 3 %, se recorta con su proporción real y se coloca sobre una hoja blanca del tamaño elegido, arriba y centrado a lo ancho, como al imprimir una carta en papel oficio. Con 3 % o menos se ajusta exacto: es error de medición y no se nota.
 - Se puede elegir a mano: Auto, Carta, Oficio, A4 u Original. La elección se recuerda para la siguiente foto y se puede cambiar después en el editor de página.
 - La página conserva la resolución medida en la foto (no se agranda); solo se ajusta la proporción.
 
@@ -91,7 +92,7 @@ La **primera compilación** de cada plataforma descarga OpenCV 4.13 precompilado
 flutter pub get
 dart run build_runner build          # regenera el código de drift (app_database.g.dart)
 flutter run                          # teléfono conectado con depuración USB
-flutter test                         # 58 pruebas; corren en el host (Linux) con OpenCV nativo
+flutter test                         # 66 pruebas; corren en el host (Linux) con OpenCV nativo
 flutter analyze
 flutter build apk --release --split-per-abi --target-platform android-arm64
 ```
@@ -157,7 +158,7 @@ La base guarda rutas relativas. El número de revisión `N` cambia con cada edic
 ### Plataformas y distribución
 - **Solo Android.** No hay proyecto iOS, web ni escritorio. El código Dart es portable, pero iOS requiere una Mac para compilar.
 - **Solo arm64.** Para 32 bits (armeabi-v7a) o emuladores x86_64 hay que agregar `--target-platform android-arm,android-x64`. Cada arquitectura nueva compila su propia versión de OpenCV.
-- **Firma de depuración.** El build de release está firmado con la clave debug. Antes de publicar versiones hay que configurar una keystore propia en `android/app/build.gradle.kts`: Android solo instala una actualización si está firmada con la misma clave que la versión instalada.
+- **Firma.** El release se firma con la clave de `android/key.properties` (fuera de git). Si ese archivo no existe, se usa la clave de depuración. `tool/build_release.sh` genera el APK de publicación y avisa si quedó firmado con la clave de depuración.
 - **Identidad visual.** El id de Android es `dev.cervz.nuvora`. El ícono del launcher se genera desde `assets/branding/` (ver "Ícono" más arriba).
 - **Tamaño.** El APK pesa ~32 MB porque Android guarda sin comprimir `libflutter.so` (~11 MB) y `libdartcv.so` (~11 MB). En Play Store con App Bundle la descarga sería menor.
 - **Permisos de los plugins.** Además de la cámara, los plugins agregan `ACCESS_NETWORK_STATE` y `READ_EXTERNAL_STORAGE`. La app no los usa. Se quitaron `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, y no se declara `INTERNET`.

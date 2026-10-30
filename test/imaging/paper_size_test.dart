@@ -74,18 +74,43 @@ void main() {
       const wide = Quad(Pt(0, 0.1), Pt(1, 0.1), Pt(1, 0.9), Pt(0, 0.9));
       expect(touchesFrame(wide), isTrue);
       expect(resolvePaper(PaperSize.auto, wide, 3000, 4000), PaperSize.original);
-      expect(targetAspect(PaperSize.auto, wide, 3000, 4000), isNull);
+      expect(pageLayout(PaperSize.auto, wide, 3000, 4000), (warpAspect: null, paperAspect: null));
       // Visible 3000 × 3960 (1.32, a 2 % de carta): se ajusta a carta.
       const nearLetter = Quad(Pt(0, 0.005), Pt(1, 0.005), Pt(1, 0.995), Pt(0, 0.995));
       expect(resolvePaper(PaperSize.auto, nearLetter, 3000, 4000), PaperSize.letter);
     });
+  });
 
-    test('una elección manual se respeta y sigue la orientación de la hoja', () {
-      final portrait = photographRect(215.9, 279.4);
-      expect(targetAspect(PaperSize.oficio, portrait, 3000, 4000), closeTo(216 / 340, 1e-9));
+  group('pageLayout', () {
+    final letterPhoto = photographRect(215.9, 279.4);
+
+    test('una carta con papel carta se ajusta exacto, sin márgenes', () {
+      final l = pageLayout(PaperSize.letter, letterPhoto, 3000, 4000);
+      expect(l.warpAspect, closeTo(215.9 / 279.4, 1e-9));
+      expect(l.paperAspect, isNull);
+    });
+
+    test('una carta con papel oficio conserva su proporción y va sobre la hoja', () {
+      final l = pageLayout(PaperSize.oficio, letterPhoto, 3000, 4000);
+      expect(l.warpAspect, closeTo(215.9 / 279.4, 0.01), reason: 'no se deforma');
+      expect(l.paperAspect, closeTo(216 / 340, 1e-9));
+    });
+
+    test('un recibo con papel carta lleva margen', () {
+      final l = pageLayout(PaperSize.letter, photographRect(80, 250), 3000, 4000);
+      expect(l.warpAspect, closeTo(80 / 250, 0.01));
+      expect(l.paperAspect, closeTo(215.9 / 279.4, 1e-9));
+    });
+
+    test('la hoja apaisada usa el papel apaisado', () {
       final landscape = photographRect(279.4, 215.9, tiltX: 10, tiltY: 5);
-      expect(targetAspect(PaperSize.letter, landscape, 3000, 4000), closeTo(279.4 / 215.9, 1e-9));
-      expect(targetAspect(PaperSize.original, portrait, 3000, 4000), isNull);
+      final l = pageLayout(PaperSize.letter, landscape, 3000, 4000);
+      expect(l.warpAspect, closeTo(279.4 / 215.9, 1e-9));
+      expect(l.paperAspect, isNull);
+    });
+
+    test('original conserva los lados medidos', () {
+      expect(pageLayout(PaperSize.original, letterPhoto, 3000, 4000), (warpAspect: null, paperAspect: null));
     });
   });
 

@@ -46,3 +46,5 @@ app.*.map.json
 
 # Fotos reales de calibración: contienen datos personales, nunca se versionan.
 /test/fixtures/real/
+
+/docs/extras.md

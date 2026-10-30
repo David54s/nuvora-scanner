@@ -54,6 +54,36 @@ cv.Mat warpQuad(cv.Mat src, Quad quad, {int maxSide = maxPageSide, double? aspec
   }
 }
 
+/// Coloca [page] sobre una hoja blanca de proporción [paperAspect]
+/// (ancho/alto) sin deformarla: arriba y centrada a lo ancho, como una hoja
+/// carta impresa en papel oficio. Devuelve un Mat nuevo; no modifica [page].
+cv.Mat placeOnPaper(cv.Mat page, double paperAspect, {int maxSide = maxPageSide}) {
+  final w = page.cols, h = page.rows;
+  var bottom = 0, left = 0, right = 0;
+  if (w / h > paperAspect) {
+    // Más ancha que el papel: se conserva el ancho y el blanco va abajo.
+    bottom = math.max(0, (w / paperAspect).round() - h);
+  } else {
+    // Más alta que el papel: se conserva el alto y el blanco va a los lados.
+    final extra = math.max(0, (h * paperAspect).round() - w);
+    left = extra ~/ 2;
+    right = extra - left;
+  }
+  final white = page.channels == 1 ? cv.Scalar.all(255) : cv.Scalar(255, 255, 255);
+  final sheet = cv.copyMakeBorder(page, 0, bottom, left, right, cv.BORDER_CONSTANT, value: white);
+  final longSide = math.max(sheet.cols, sheet.rows);
+  if (longSide <= maxSide) return sheet;
+  final s = maxSide / longSide;
+  try {
+    return cv.resize(sheet, (
+      math.max(1, (sheet.cols * s).round()),
+      math.max(1, (sheet.rows * s).round()),
+    ), interpolation: cv.INTER_AREA);
+  } finally {
+    sheet.dispose();
+  }
+}
+
 /// Rota en múltiplos de 90° (sentido horario). Devuelve un Mat nuevo.
 cv.Mat rotateQuarterTurns(cv.Mat src, int degrees) {
   return switch (degrees % 360) {

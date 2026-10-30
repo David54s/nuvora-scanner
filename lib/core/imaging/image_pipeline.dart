@@ -97,17 +97,14 @@ Uint8List previewSync(
       ? cv.IMREAD_REDUCED_COLOR_2
       : cv.IMREAD_COLOR;
   final img = _read(path, flags: flags);
-  cv.Mat? warped, filtered, rotated;
+  cv.Mat? warped, filtered, placed, rotated;
   final params = cv.VecI32.fromList([cv.IMWRITE_JPEG_QUALITY, 85]);
   try {
-    warped = warpQuad(
-      img,
-      quad,
-      maxSide: maxSide,
-      aspect: targetAspect(paper, quad, sourceSize.width, sourceSize.height),
-    );
+    final layout = pageLayout(paper, quad, sourceSize.width, sourceSize.height);
+    warped = warpQuad(img, quad, maxSide: maxSide, aspect: layout.warpAspect);
     filtered = applyFilter(warped, filter);
-    rotated = rotateQuarterTurns(filtered, rotation);
+    placed = _onPaper(filtered, layout, maxSide);
+    rotated = rotateQuarterTurns(placed, rotation);
     final (ok, bytes) = cv.imencode('.jpg', rotated, params: params);
     if (!ok) throw ImageWriteException('(vista previa)');
     return bytes;
@@ -115,6 +112,7 @@ Uint8List previewSync(
     img.dispose();
     warped?.dispose();
     filtered?.dispose();
+    placed?.dispose();
     rotated?.dispose();
     params.dispose();
   }
@@ -139,15 +137,17 @@ QuadDetection detectSync(String path) {
   }
 }
 
-/// original → recorte de perspectiva (ajustado al papel) → filtro → rotación
-/// → JPEG + miniatura.
+/// original → recorte de perspectiva → filtro → colocación sobre el papel
+/// (sin deformar) → rotación → JPEG + miniatura.
 ImageSize renderSync(RenderRequest req) {
   final img = _read(req.originalPath);
-  cv.Mat? warped, filtered, rotated, thumb;
+  cv.Mat? warped, filtered, placed, rotated, thumb;
   try {
-    warped = warpQuad(img, req.quad, aspect: targetAspect(req.paper, req.quad, img.cols, img.rows));
+    final layout = pageLayout(req.paper, req.quad, img.cols, img.rows);
+    warped = warpQuad(img, req.quad, aspect: layout.warpAspect);
     filtered = applyFilter(warped, req.filter);
-    rotated = rotateQuarterTurns(filtered, req.rotation);
+    placed = _onPaper(filtered, layout, maxPageSide);
+    rotated = rotateQuarterTurns(placed, req.rotation);
     _writeJpeg(req.processedPath, rotated, _processedJpegQuality);
 
     final s = thumbnailSide / math.max(rotated.cols, rotated.rows);
@@ -163,9 +163,17 @@ ImageSize renderSync(RenderRequest req) {
     img.dispose();
     warped?.dispose();
     filtered?.dispose();
+    placed?.dispose();
     rotated?.dispose();
     thumb?.dispose();
   }
+}
+
+/// Coloca la página sobre el papel si el [layout] lo pide; si no, la copia.
+/// El margen se agrega después del filtro para que quede blanco puro.
+cv.Mat _onPaper(cv.Mat page, PageLayout layout, int maxSide) {
+  final paper = layout.paperAspect;
+  return paper == null ? page.clone() : placeOnPaper(page, paper, maxSide: maxSide);
 }
 
 cv.Mat _read(String path, {int flags = cv.IMREAD_COLOR}) {

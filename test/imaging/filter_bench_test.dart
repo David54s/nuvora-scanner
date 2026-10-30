@@ -32,7 +32,7 @@ void main() {
         for (final c in (corners as List).cast<List>()) Pt((c[0] as num) / img.cols, (c[1] as num) / img.rows),
       ];
       final quad = Quad(c[0], c[1], c[2], c[3]);
-      final page = warpQuad(img, quad, aspect: targetAspect(PaperSize.auto, quad, img.cols, img.rows));
+      final page = warpQuad(img, quad, aspect: pageLayout(PaperSize.auto, quad, img.cols, img.rows).warpAspect);
       final base = name.replaceAll(' ', '_').replaceAll('.jpeg', '');
       for (final f in [PageFilter.enhanced, PageFilter.bw]) {
         final out = applyFilter(page, f);
@@ -45,6 +45,15 @@ void main() {
           );
         }
         out.dispose();
+      }
+      // La misma hoja forzada a Oficio: debe verse sin deformar, con blanco abajo.
+      final oficio = pageLayout(PaperSize.oficio, quad, img.cols, img.rows);
+      final warped = warpQuad(img, quad, aspect: oficio.warpAspect);
+      final enhanced = applyFilter(warped, PageFilter.enhanced);
+      final sheet = oficio.paperAspect == null ? enhanced.clone() : placeOnPaper(enhanced, oficio.paperAspect!);
+      cv.imwrite(p.join(_outDir, '${base}_oficio.jpg'), sheet);
+      for (final m in [warped, enhanced, sheet]) {
+        m.dispose();
       }
       page.dispose();
       img.dispose();

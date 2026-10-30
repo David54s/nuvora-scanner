@@ -13,6 +13,8 @@ import 'package:nuvora_scanner/core/imaging/quad.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opencv_dart/opencv.dart' as cv;
 
+import 'paper_size_test.dart' show photographRect;
+
 /// Foto sintética: fondo oscuro con algo de textura y una hoja blanca con
 /// "renglones" de texto en las esquinas [corners] (en píxeles).
 cv.Mat syntheticPhoto(List<(int, int)> corners, {int w = 1200, int h = 900, int background = 60}) {
@@ -150,6 +152,37 @@ void main() {
       final out = warpQuad(img, Quad.full, maxSide: 200);
       addTearDown(out.dispose);
       expect(math.max(out.cols, out.rows), 200);
+    });
+  });
+
+  group('placeOnPaper', () {
+    test('página ancha: conserva el ancho y el blanco va abajo', () {
+      final page = cv.Mat.fromScalar(100, 200, cv.MatType.CV_8UC3, cv.Scalar.all(0));
+      addTearDown(page.dispose);
+      final out = placeOnPaper(page, 1.0);
+      addTearDown(out.dispose);
+      expect((out.cols, out.rows), (200, 200));
+      expect(out.at<cv.Vec3b>(50, 100).val1, 0, reason: 'documento arriba');
+      expect(out.at<cv.Vec3b>(150, 100).val1, 255, reason: 'blanco abajo');
+    });
+
+    test('página alta: conserva el alto y centra a lo ancho', () {
+      final page = cv.Mat.fromScalar(200, 100, cv.MatType.CV_8UC1, cv.Scalar.all(0));
+      addTearDown(page.dispose);
+      final out = placeOnPaper(page, 1.0);
+      addTearDown(out.dispose);
+      expect((out.cols, out.rows), (200, 200));
+      expect(out.at<int>(100, 10), 255);
+      expect(out.at<int>(100, 100), 0);
+      expect(out.at<int>(100, 190), 255);
+    });
+
+    test('se reduce si pasa del lado máximo', () {
+      final page = cv.Mat.fromScalar(100, 400, cv.MatType.CV_8UC3, cv.Scalar.all(0));
+      addTearDown(page.dispose);
+      final out = placeOnPaper(page, 1.0, maxSide: 200);
+      addTearDown(out.dispose);
+      expect((out.cols, out.rows), (200, 200));
     });
   });
 
@@ -296,6 +329,44 @@ void main() {
       final ratio = math.max(out.width, out.height) / math.min(out.width, out.height);
       expect(ratio, closeTo(PaperSize.letter.ratio!, 0.005));
       expect(paperForImage(out.width, out.height), PaperSize.letter);
+    });
+
+    test('una carta renderizada en oficio no se deforma: el blanco queda abajo', () {
+      // Hoja carta gris claro fotografiada en perspectiva con una focal conocida.
+      final q = photographRect(215.9, 279.4, f: 1300, imgW: 1200, imgH: 1600);
+      final img = cv.Mat.fromScalar(1600, 1200, cv.MatType.CV_8UC3, cv.Scalar.all(50));
+      final poly = cv.VecVecPoint.fromList([
+        [for (final pt in q.toPixels(1200, 1600)) cv.Point(pt.x.round(), pt.y.round())],
+      ]);
+      cv.fillPoly(img, poly, cv.Scalar.all(200));
+      poly.dispose();
+      final src = '${tmp.path}/carta.png';
+      cv.imwrite(src, img);
+      img.dispose();
+
+      final out = renderSync(
+        RenderRequest(
+          originalPath: src,
+          quad: q,
+          filter: PageFilter.original,
+          rotation: 0,
+          paper: PaperSize.oficio,
+          processedPath: '${tmp.path}/p.png',
+          thumbPath: '${tmp.path}/t.jpg',
+        ),
+      );
+      // La hoja completa tiene proporción oficio…
+      expect(out.height / out.width, closeTo(PaperSize.oficio.ratio!, 0.01));
+      // …y el documento (gris) conserva la de carta, arriba, con blanco debajo.
+      final page = cv.imread('${tmp.path}/p.png', flags: cv.IMREAD_GRAYSCALE);
+      addTearDown(page.dispose);
+      var docRows = 0;
+      for (var y = 0; y < page.rows; y++) {
+        if (page.at<int>(y, page.cols ~/ 2) < 235) docRows++;
+      }
+      expect(docRows / page.cols, closeTo(PaperSize.letter.ratio!, 0.02 * PaperSize.letter.ratio!));
+      expect(page.at<int>(5, page.cols ~/ 2), lessThan(235), reason: 'el documento empieza arriba');
+      expect(page.at<int>(page.rows - 5, page.cols ~/ 2), greaterThanOrEqualTo(250), reason: 'blanco abajo');
     });
 
     test('ruta inexistente lanza ImageReadException', () {

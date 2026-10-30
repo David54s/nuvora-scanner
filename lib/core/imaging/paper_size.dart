@@ -39,13 +39,27 @@ const _autoMaxRatio = 1.75;
 /// deformación quede acotada a este margen.
 const _cutTolerance = 0.05;
 
-/// Proporción ancho/alto que debe tener la página, o null si se conservan
-/// las proporciones medidas en la foto.
-double? targetAspect(PaperSize choice, Quad quad, int imageWidth, int imageHeight) {
+/// Si la proporción real de la hoja difiere del papel en menos que esto, se
+/// considera error de medición: se ajusta exacto (la deformación no se nota).
+const _snapTolerance = 0.03;
+
+/// Cómo componer la página (proporciones ancho/alto):
+/// - [warpAspect]: proporción del recorte; null = los lados medidos en la foto.
+/// - [paperAspect]: si no es null, el recorte se coloca sobre una hoja blanca
+///   de esa proporción en lugar de estirarlo.
+typedef PageLayout = ({double? warpAspect, double? paperAspect});
+
+/// Decide cómo llevar la hoja fotografiada al papel elegido sin deformarla:
+/// si su proporción real ya es la del papel se ajusta exacto; si no, se
+/// recorta con su proporción real y se coloca sobre el papel (el resto queda
+/// en blanco).
+PageLayout pageLayout(PaperSize choice, Quad quad, int imageWidth, int imageHeight) {
   final ratio = resolvePaper(choice, quad, imageWidth, imageHeight).ratio;
-  if (ratio == null) return null;
-  final landscape = estimateAspect(quad, imageWidth, imageHeight) > 1;
-  return landscape ? ratio : 1 / ratio;
+  if (ratio == null) return (warpAspect: null, paperAspect: null);
+  final doc = estimateAspect(quad, imageWidth, imageHeight);
+  final paper = doc > 1 ? ratio : 1 / ratio;
+  if ((doc - paper).abs() / paper <= _snapTolerance) return (warpAspect: paper, paperAspect: null);
+  return (warpAspect: doc, paperAspect: paper);
 }
 
 /// El tamaño concreto que corresponde a [choice] (resuelve [PaperSize.auto]).
