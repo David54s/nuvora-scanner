@@ -6,6 +6,8 @@ import 'package:opencv_dart/opencv.dart' as cv;
 
 import 'edge_detector.dart';
 import 'filters.dart';
+import 'id_composer.dart';
+import 'id_layout.dart';
 import 'page_filter.dart';
 import 'paper_size.dart';
 import 'perspective.dart';
@@ -32,6 +34,26 @@ class RenderRequest {
   final PageFilter filter;
   final int rotation;
   final PaperSize paper;
+  final String processedPath;
+  final String thumbPath;
+}
+
+/// Datos para componer una página de identificación. Las rutas de
+/// [sides] son absolutas.
+class IdRenderRequest {
+  const IdRenderRequest({
+    required this.sides,
+    required this.layout,
+    required this.processedPath,
+    required this.thumbPath,
+    this.rotation = 0,
+  });
+
+  final List<IdSide> sides;
+  final IdLayout layout;
+
+  /// Giro de la hoja completa.
+  final int rotation;
   final String processedPath;
   final String thumbPath;
 }
@@ -67,6 +89,14 @@ class ImagePipeline {
     PaperSize paper = PaperSize.original,
     int maxSide = 1280,
   }) => Isolate.run(() => previewSync(path, quad, filter, rotation, sourceSize, maxSide, paper: paper));
+
+  /// Compone la hoja de una identificación a [idSheetDpi] y la guarda.
+  Future<ImageSize> renderIdCard(IdRenderRequest req) => Isolate.run(() => renderIdCardSync(req));
+
+  /// Cómo quedará la hoja de una identificación, como JPEG en memoria con el
+  /// lado largo de unos [maxSide] px.
+  Future<Uint8List> previewIdCard(List<IdSide> sides, IdLayout layout, {int rotation = 0, int maxSide = 1280}) =>
+      Isolate.run(() => previewIdCardSync(sides, layout, rotation: rotation, maxSide: maxSide));
 }
 
 (ImageSize, QuadDetection) ingestAndDetectSync(String srcPath, String dstPath) {
@@ -141,32 +171,88 @@ QuadDetection detectSync(String path) {
 /// (sin deformar) → rotación → JPEG + miniatura.
 ImageSize renderSync(RenderRequest req) {
   final img = _read(req.originalPath);
-  cv.Mat? warped, filtered, placed, rotated, thumb;
+  cv.Mat? warped, filtered, placed, rotated;
   try {
     final layout = pageLayout(req.paper, req.quad, img.cols, img.rows);
     warped = warpQuad(img, req.quad, aspect: layout.warpAspect);
     filtered = applyFilter(warped, req.filter);
     placed = _onPaper(filtered, layout, maxPageSide);
     rotated = rotateQuarterTurns(placed, req.rotation);
-    _writeJpeg(req.processedPath, rotated, _processedJpegQuality);
-
-    final s = thumbnailSide / math.max(rotated.cols, rotated.rows);
-    thumb = s < 1
-        ? cv.resize(rotated, (
-            math.max(1, (rotated.cols * s).round()),
-            math.max(1, (rotated.rows * s).round()),
-          ), interpolation: cv.INTER_AREA)
-        : rotated.clone();
-    _writeJpeg(req.thumbPath, thumb, 85);
-    return (width: rotated.cols, height: rotated.rows);
+    return _writeOutputs(rotated, req.processedPath, req.thumbPath);
   } finally {
     img.dispose();
     warped?.dispose();
     filtered?.dispose();
     placed?.dispose();
     rotated?.dispose();
-    thumb?.dispose();
   }
+}
+
+/// lados → hoja compuesta a [idSheetDpi] → giro → JPEG + miniatura.
+ImageSize renderIdCardSync(IdRenderRequest req) {
+  final images = <cv.Mat>[];
+  cv.Mat? sheet, rotated;
+  try {
+    for (final s in req.sides) {
+      images.add(_read(s.originalPath));
+    }
+    sheet = composeIdSheet(_sideImages(req.sides, images), req.layout);
+    rotated = rotateQuarterTurns(sheet, req.rotation);
+    return _writeOutputs(rotated, req.processedPath, req.thumbPath);
+  } finally {
+    for (final m in images) {
+      m.dispose();
+    }
+    sheet?.dispose();
+    rotated?.dispose();
+  }
+}
+
+Uint8List previewIdCardSync(List<IdSide> sides, IdLayout layout, {int rotation = 0, int maxSide = 1280}) {
+  final images = <cv.Mat>[];
+  cv.Mat? sheet, rotated;
+  final params = cv.VecI32.fromList([cv.IMWRITE_JPEG_QUALITY, 85]);
+  try {
+    // Cada lado ocupa una fracción de la hoja: con media resolución sobra.
+    for (final s in sides) {
+      images.add(_read(s.originalPath, flags: cv.IMREAD_REDUCED_COLOR_2));
+    }
+    final dpi = maxSide / (layout.paperHeightMm / 25.4);
+    sheet = composeIdSheet(_sideImages(sides, images), layout, dpi: dpi);
+    rotated = rotateQuarterTurns(sheet, rotation);
+    final (ok, bytes) = cv.imencode('.jpg', rotated, params: params);
+    if (!ok) throw ImageWriteException('(vista previa)');
+    return bytes;
+  } finally {
+    for (final m in images) {
+      m.dispose();
+    }
+    sheet?.dispose();
+    rotated?.dispose();
+    params.dispose();
+  }
+}
+
+List<IdSideImage> _sideImages(List<IdSide> sides, List<cv.Mat> images) => [
+  for (final (i, s) in sides.indexed) (image: images[i], quad: s.quad, rotation: s.rotation),
+];
+
+/// Escribe [page] y su miniatura. Devuelve el tamaño de [page].
+ImageSize _writeOutputs(cv.Mat page, String processedPath, String thumbPath) {
+  _writeJpeg(processedPath, page, _processedJpegQuality);
+  final s = thumbnailSide / math.max(page.cols, page.rows);
+  final thumb = s < 1
+      ? cv.resize(page, (
+          math.max(1, (page.cols * s).round()),
+          math.max(1, (page.rows * s).round()),
+        ), interpolation: cv.INTER_AREA)
+      : page.clone();
+  try {
+    _writeJpeg(thumbPath, thumb, 85);
+  } finally {
+    thumb.dispose();
+  }
+  return (width: page.cols, height: page.rows);
 }
 
 /// Coloca la página sobre el papel si el [layout] lo pide; si no, la copia.

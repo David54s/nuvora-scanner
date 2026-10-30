@@ -42,6 +42,10 @@ Si buscas lo esencial de CamScanner sin anuncios, sin suscripciones, sin marcas 
 
 ✨ **Aspecto de escaneo.** El filtro *Mejorado* borra sombras, deja el papel blanco y el texto negro y nítido, y conserva el color de firmas y sellos. También hay *B/N*, *Grises* y *Original*.
 
+🪪 **Identificaciones en una sola hoja.** Escanea el frente y el reverso de tu INE, licencia, tarjeta o la página de datos del pasaporte, y Nuvora los pone en la misma hoja a tamaño real, como una fotocopia. Desde el menú de la identificación cambias el acomodo (apilados o lado a lado), la posición, el tamaño, el orden de los lados, el papel y el filtro, incluso después de guardarla.
+
+🧭 **Todo a la mano.** El Inicio muestra tus herramientas recientes y todos tus archivos; la pantalla Herramientas reúne todo lo que Nuvora sabe hacer. El botón redondo de la barra inferior siempre escanea.
+
 👀 **Ves el resultado antes de guardarlo.** Cada foto pasa por una revisión: ajustas los bordes, eliges tamaño y filtro, la giras y la agregas al documento. Luego sigues con la siguiente página.
 
 📚 **Tu biblioteca, ordenada.** Documentos de varias páginas, carpetas, búsqueda por título y páginas que se reordenan arrastrando. Cada página se puede volver a editar sin perder calidad.

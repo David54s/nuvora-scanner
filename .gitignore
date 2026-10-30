@@ -48,3 +48,6 @@ app.*.map.json
 /test/fixtures/real/
 
 /docs/extras.md
+
+# Documentación interna del proyecto: solo local, nunca se versiona.
+/docs/informacion/

@@ -7,6 +7,7 @@ import '../../../core/providers.dart';
 import '../../../core/ui/dialogs.dart';
 import '../../capture/presentation/start_scan.dart';
 import '../../document/presentation/document_actions.dart';
+import '../../tools/presentation/recent_tools_strip.dart';
 import '../application/library_providers.dart';
 import '../data/library_repository.dart';
 import 'widgets/document_card.dart';
@@ -14,7 +15,8 @@ import 'widgets/document_card.dart';
 /// Logo de la app (también es el ícono del launcher).
 const nuvoraLogo = 'assets/branding/nuvora.png';
 
-/// Inicio (sin [folderId]) o contenido de una carpeta.
+/// Inicio (sin [folderId]: herramientas recientes y todos los archivos) o
+/// contenido de una carpeta.
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key, this.folderId});
 
@@ -110,25 +112,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ],
       ),
       body: _buildBody(folders, docs),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'import',
-            tooltip: 'Importar de la galería',
-            onPressed: () => _scan(fromGallery: true),
-            child: const Icon(Icons.photo_library_outlined),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'scan',
-            onPressed: () => _scan(fromGallery: false),
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: const Text('Escanear'),
-          ),
-        ],
-      ),
+      // En Inicio escanear está en la barra inferior.
+      floatingActionButton: _isRoot
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'import',
+                  tooltip: 'Importar de la galería',
+                  onPressed: () => _scan(fromGallery: true),
+                  child: const Icon(Icons.photo_library_outlined),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'scan',
+                  onPressed: () => _scan(fromGallery: false),
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: const Text('Escanear'),
+                ),
+              ],
+            ),
     );
   }
 
@@ -139,10 +144,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     if (!docs.hasValue || !folders.hasValue) return const Center(child: CircularProgressIndicator());
     final f = folders.requireValue;
     final d = docs.requireValue;
-    if (f.isEmpty && d.isEmpty) return _EmptyState(searching: _query.trim().isNotEmpty);
+    final searching = _query.trim().isNotEmpty;
+    final showTools = _isRoot && !searching;
+    if (f.isEmpty && d.isEmpty && !showTools) return _EmptyState(searching: searching, root: _isRoot);
 
     return CustomScrollView(
       slivers: [
+        if (showTools) ...[
+          const SliverToBoxAdapter(child: RecentToolsStrip()),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text('Mis archivos', style: Theme.of(context).textTheme.titleMedium),
+            ),
+          ),
+        ],
+        if (f.isEmpty && d.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(searching: searching, root: _isRoot),
+          ),
         if (f.isNotEmpty)
           SliverList.list(
             children: [
@@ -167,8 +188,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ],
           ),
         SliverPadding(
-          // Espacio inferior para que los botones flotantes no tapen la última fila.
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 160),
+          // Espacio inferior para que la barra o los botones flotantes no tapen
+          // la última fila.
+          padding: EdgeInsets.fromLTRB(8, 8, 8, _isRoot ? MediaQuery.paddingOf(context).bottom + 16 : 160),
           sliver: SliverGrid.builder(
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 200,
@@ -190,9 +212,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.searching});
+  const _EmptyState({required this.searching, required this.root});
 
   final bool searching;
+  final bool root;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +238,9 @@ class _EmptyState extends StatelessWidget {
             if (!searching) ...[
               const SizedBox(height: 8),
               Text(
-                'Toca "Escanear" para fotografiar un documento o importa fotos de la galería.',
+                root
+                    ? 'Toca el botón de escanear de abajo o elige una herramienta.'
+                    : 'Toca "Escanear" para fotografiar un documento o importa fotos de la galería.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
               ),

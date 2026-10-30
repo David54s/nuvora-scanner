@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../imaging/id_layout.dart';
 import '../imaging/page_filter.dart';
 import '../imaging/paper_size.dart';
 import '../imaging/quad.dart';
@@ -51,6 +52,11 @@ class Pages extends Table {
   IntColumn get width => integer()();
   IntColumn get height => integer()();
 
+  /// Solo en páginas de identificación: los lados y su acomodo, para volver
+  /// a componer la hoja. En ellas [originalPath] y [quad] son los del primer
+  /// lado.
+  TextColumn get composition => text().map(const IdCompositionConverter()).nullable()();
+
   /// Reservado para OCR (fase 2, con una tabla FTS5).
   TextColumn get ocrText => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -73,4 +79,14 @@ class QuadConverter extends TypeConverter<Quad, String> {
 
   @override
   String toSql(Quad value) => value.toJson();
+}
+
+class IdCompositionConverter extends TypeConverter<IdComposition, String> {
+  const IdCompositionConverter();
+
+  @override
+  IdComposition fromSql(String fromDb) => IdComposition.fromJson(fromDb);
+
+  @override
+  String toSql(IdComposition value) => value.toJson();
 }

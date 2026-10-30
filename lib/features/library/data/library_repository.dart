@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/imaging/id_layout.dart';
 import '../../../core/imaging/page_filter.dart';
 import '../../../core/imaging/paper_size.dart';
 import '../../../core/imaging/quad.dart';
@@ -34,6 +35,7 @@ class NewPage {
     required this.width,
     required this.height,
     this.paper = PaperSize.original,
+    this.composition,
   });
 
   final String uuid;
@@ -46,6 +48,9 @@ class NewPage {
   final int width;
   final int height;
   final PaperSize paper;
+
+  /// Solo en páginas de identificación.
+  final IdComposition? composition;
 }
 
 /// Acceso a carpetas, documentos y páginas. Los archivos de una página se
@@ -166,6 +171,7 @@ class LibraryRepository {
             filter: p.filter,
             rotation: Value(p.rotation),
             paper: Value(p.paper),
+            composition: Value(p.composition),
             width: p.width,
             height: p.height,
           ),
@@ -204,10 +210,12 @@ class LibraryRepository {
     required String thumbPath,
     required int width,
     required int height,
+    IdComposition? composition,
   }) async {
     await _db.transaction(() async {
       await (_db.update(_db.pages)..where((p) => p.id.equals(old.id))).write(
         PagesCompanion(
+          composition: composition == null ? const Value.absent() : Value(composition),
           quad: Value(quad),
           filter: Value(filter),
           rotation: Value(rotation),

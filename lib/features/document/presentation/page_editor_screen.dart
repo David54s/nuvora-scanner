@@ -79,6 +79,7 @@ class _PageEditorScreenState extends ConsumerState<PageEditorScreen> {
     final index = _index.clamp(0, pages.length - 1);
     final page = pages[index];
     final busy = _busy.contains(page.id);
+    final isIdCard = page.composition != null;
     final files = ref.watch(fileStoreProvider);
 
     return Scaffold(
@@ -124,13 +125,15 @@ class _PageEditorScreenState extends ConsumerState<PageEditorScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(height: 8),
-                  PaperSelector(
-                    selected: page.paper,
-                    enabled: !busy,
-                    onSelected: (p) {
-                      if (p != page.paper) _rerender(page, paper: p);
-                    },
-                  ),
+                  // En una identificación el papel se elige en su menú.
+                  if (!isIdCard)
+                    PaperSelector(
+                      selected: page.paper,
+                      enabled: !busy,
+                      onSelected: (p) {
+                        if (p != page.paper) _rerender(page, paper: p);
+                      },
+                    ),
                   FilterSelector(
                     selected: page.filter,
                     enabled: !busy,
@@ -151,11 +154,18 @@ class _PageEditorScreenState extends ConsumerState<PageEditorScreen> {
                         label: 'Girar der.',
                         onPressed: busy ? null : () => _rerender(page, rotation: page.rotation + 90),
                       ),
-                      _ToolButton(
-                        icon: Icons.crop,
-                        label: 'Recortar',
-                        onPressed: busy ? null : () => context.push('/page/${page.id}/crop'),
-                      ),
+                      if (isIdCard)
+                        _ToolButton(
+                          icon: Icons.badge_outlined,
+                          label: 'Editar identificación',
+                          onPressed: busy ? null : () => context.push('/page/${page.id}/id-layout'),
+                        )
+                      else
+                        _ToolButton(
+                          icon: Icons.crop,
+                          label: 'Recortar',
+                          onPressed: busy ? null : () => context.push('/page/${page.id}/crop'),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),

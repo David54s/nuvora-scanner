@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:nuvora_scanner/core/db/app_database.dart';
+import 'package:nuvora_scanner/core/imaging/id_layout.dart';
 import 'package:nuvora_scanner/core/imaging/image_pipeline.dart';
 import 'package:nuvora_scanner/core/imaging/page_filter.dart';
 import 'package:nuvora_scanner/core/imaging/paper_size.dart';
@@ -129,5 +130,65 @@ void main() {
     expect((after.width, after.height), (480, 320));
     expect(File(files.abs(before.processedPath)).existsSync(), isFalse);
     expect(File(files.abs(after.processedPath)).existsSync(), isTrue);
+  });
+
+  group('identificación', () {
+    const layout = IdLayout(template: IdTemplate.ine);
+    List<IdSide> sides() => [
+      IdSide(originalPath: photo('frente'), quad: quad),
+      IdSide(originalPath: photo('reverso'), quad: quad),
+    ];
+
+    test('saveIdCard crea un documento de una hoja con los lados guardados', () async {
+      final id = await service.saveIdCard(sides(), layout, title: 'INE');
+      final page = (await repo.pagesOf(id)).single;
+      final comp = page.composition!;
+      expect(comp.sides, hasLength(2));
+      for (final s in comp.sides) {
+        expect(p.isAbsolute(s.originalPath), isFalse);
+        expect(File(files.abs(s.originalPath)).existsSync(), isTrue, reason: s.originalPath);
+      }
+      expect(page.originalPath, comp.sides.first.originalPath);
+      expect((page.width, page.height), (2550, 3300), reason: 'Carta a 300 dpi');
+      expect(page.paper, PaperSize.letter);
+      expect(File(files.abs(page.processedPath)).existsSync(), isTrue);
+      expect(File(files.abs(page.thumbPath)).existsSync(), isTrue);
+    });
+
+    test('recomposeIdCard cambia el acomodo y reemplaza un lado tomado de nuevo', () async {
+      final id = await service.saveIdCard(sides(), layout, title: 'INE');
+      final before = (await repo.pagesOf(id)).single;
+      final oldBack = before.composition!.sides[1].originalPath;
+      await service.recomposeIdCard(
+        before,
+        IdComposition(
+          layout: layout.copyWith(paper: PaperSize.oficio, swapped: true),
+          sides: [
+            before.composition!.sides[0],
+            IdSide(originalPath: photo('otro'), quad: Quad.full),
+          ],
+        ),
+      );
+      final after = (await repo.pagesOf(id)).single;
+      expect(after.revision, 1);
+      expect(after.paper, PaperSize.oficio);
+      expect(after.composition!.layout.swapped, isTrue);
+      expect(after.composition!.sides[0].originalPath, before.composition!.sides[0].originalPath);
+      expect(after.composition!.sides[1].originalPath, isNot(oldBack));
+      expect(File(files.abs(after.composition!.sides[1].originalPath)).existsSync(), isTrue);
+      expect(File(files.abs(oldBack)).existsSync(), isFalse, reason: 'el lado reemplazado se borra');
+      expect(File(files.abs(before.processedPath)).existsSync(), isFalse);
+      expect(after.height / after.width, closeTo(PaperSize.oficio.ratio!, 0.01));
+    });
+
+    test('rerender de una identificación gira la hoja y cambia el filtro', () async {
+      final id = await service.saveIdCard(sides(), layout, title: 'INE');
+      final before = (await repo.pagesOf(id)).single;
+      await service.rerender(before, rotation: 90, filter: PageFilter.grayscale, paper: PaperSize.auto);
+      final after = (await repo.pagesOf(id)).single;
+      expect((after.width, after.height), (3300, 2550));
+      expect(after.composition!.layout.filter, PageFilter.grayscale);
+      expect(after.composition!.layout.paper, PaperSize.letter, reason: 'Auto no aplica a identificaciones');
+    });
   });
 }

@@ -21,6 +21,19 @@ El mínimo de API 24 lo impone el plugin de cámara (CameraX) junto con el míni
 
 ## Funcionalidades en detalle
 
+**Navegación**
+- Barra inferior flotante con las pantallas **Inicio** y **Herramientas**, y un botón redondo a la derecha que escanea un documento.
+- **Inicio:** herramientas usadas recientemente (o todas, si aún no se usó ninguna) y todos los archivos: carpetas y documentos.
+- **Herramientas:** *Escanear documento* e *Identificación*. Las usadas se recuerdan en el ajuste `recent_tools`.
+- Dentro de una carpeta no hay barra: se conservan los botones flotantes para escanear o importar en esa carpeta.
+
+**Identificación**
+- Plantillas con el tamaño real: **INE / credencial**, **Licencia de conducir** y **Tarjeta** (2 lados, 85.6 × 54 mm) y **Pasaporte** (página de datos, 125 × 88 mm).
+- La cámara muestra un marco guía con la forma de la tarjeta. Cada lado pasa por la revisión de bordes y giro. Si no se detecta la tarjeta, el recorte inicial es el marco guía. Una tarjeta en vertical en la foto se gira sola para quedar horizontal.
+- La hoja se compone a 300 dpi: cada lado se recorta con la proporción de la plantilla, se filtra y se pega sobre papel blanco. Por defecto van apilados, a tamaño real, arriba y centrados a lo ancho en Carta, con filtro *Original* ("Mejorado" borra los fondos de seguridad de una INE).
+- **Menú de la identificación:** tipo, acomodo (apilados o lado a lado), intercambiar el orden, posición (arriba o centro), tamaño (real, 125 %, 150 % o el máximo que quepa; si no cabe se reduce), papel (Carta, Oficio o A4) y filtro. Desde las miniaturas de cada lado se ajustan bordes y giro o se vuelve a tomar.
+- Se guarda como un documento de una página; el último acomodo se recuerda (`id_layout`). En el editor de página, "Editar identificación" abre el mismo menú y vuelve a componer la hoja desde las fotos originales.
+
 **Captura (una foto a la vez)**
 - La cámara dibuja **en vivo** el borde del documento detectado (en verde cuando está estable).
 - Cada foto abre la revisión en dos pasos:
@@ -61,7 +74,7 @@ El mínimo de API 24 lo impone el plugin de cámara (CameraX) junto con el míni
 
 **Documentos**
 - Documentos de varias páginas: agregar páginas, reordenarlas arrastrando y borrarlas.
-- Edición de cada página: cambiar filtro, girar ±90°, volver a recortar.
+- Edición de cada página: cambiar filtro, girar ±90°, volver a recortar (en una identificación, editar su acomodo).
 - Toda edición se recalcula desde la foto original, así que la calidad no se degrada.
 
 **Biblioteca**
@@ -92,7 +105,7 @@ La **primera compilación** de cada plataforma descarga OpenCV 4.13 precompilado
 flutter pub get
 dart run build_runner build          # regenera el código de drift (app_database.g.dart)
 flutter run                          # teléfono conectado con depuración USB
-flutter test                         # 66 pruebas; corren en el host (Linux) con OpenCV nativo
+flutter test                         # 90 pruebas; corren en el host (Linux) con OpenCV nativo
 flutter analyze
 flutter build apk --release --split-per-abi --target-platform android-arm64
 ```
@@ -109,16 +122,19 @@ flutter build apk --release --split-per-abi --target-platform android-arm64
 lib/
   app/                 MaterialApp, tema y rutas (go_router)
   core/
-    imaging/           pipeline de OpenCV (sin dependencias de Flutter): detección, perspectiva, filtros
+    imaging/           pipeline de OpenCV (sin dependencias de Flutter): detección, perspectiva, filtros,
+                       acomodo y composición de identificaciones
     db/                tablas y base de datos drift
     storage/           FileStore: rutas de archivos y limpieza
     ui/                diálogos y formato compartidos
   features/
     library/           biblioteca, carpetas y repositorio de datos
-    capture/           cámara y sesión de escaneo
+    capture/           cámara (ScanCameraView, compartida) y sesión de escaneo
     crop/              editor de esquinas y pantallas de recorte
     document/          documento, editor de página y PageService
     export/            PDF y compartir
+    tools/             registro de herramientas, recientes y pantalla Herramientas
+    id_card/           identificaciones: sesión, cámara con marco guía y menú de acomodo
 ```
 
 **Archivos en el dispositivo** (directorio privado de la app):
@@ -126,8 +142,9 @@ lib/
 - `pages/<uuid>/original.jpg`
 - `pages/<uuid>/processed_r<N>.jpg`
 - `pages/<uuid>/thumb_r<N>.jpg`
+- `pages/<uuid>/side<i>_r<N>.jpg` (solo identificaciones: la foto de cada lado)
 
-El esquema de la base va en la versión 2 (agrega el tamaño de papel por página); las bases v1 se migran solas al abrir la app.
+El esquema de la base va en la versión 3: la v2 agregó el tamaño de papel por página y la v3 la columna `composition` (JSON con los lados y el acomodo de una identificación). Las bases anteriores se migran solas al abrir la app.
 
 La base guarda rutas relativas. El número de revisión `N` cambia con cada edición para que no se muestren imágenes cacheadas.
 
@@ -143,7 +160,6 @@ La base guarda rutas relativas. El número de revisión `N` cambia con cada edic
 - **Herramientas de PDF:**
   - PDF con contraseña.
   - Firmas, anotaciones y marcas de agua.
-  - Modo cédula/ID (dos caras en una hoja).
   - Unir o dividir documentos.
   - Exportar varios documentos a la vez.
 - **Pantalla de ajustes.** El tamaño de página "ajustado a la imagen" existe en el código (`PdfPageSize.fitImage`), pero no hay opción en la interfaz. La calidad JPEG y la resolución máxima son fijas.

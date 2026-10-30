@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +8,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/imaging/quad.dart';
 import '../../../core/providers.dart';
 import '../../../core/ui/dialogs.dart';
+import '../../../core/ui/image_size.dart';
 import 'widgets/quad_editor.dart';
 
 /// Vuelve a recortar una página ya guardada, partiendo de su original.
@@ -37,7 +37,7 @@ class _PageCropScreenState extends ConsumerState<PageCropScreen> {
     try {
       final page = await ref.read(libraryRepositoryProvider).page(widget.pageId);
       if (page == null) throw StateError('La página ya no existe');
-      final size = await _imageSize(ref.read(fileStoreProvider).abs(page.originalPath));
+      final size = await imageFileSize(ref.read(fileStoreProvider).abs(page.originalPath));
       if (!mounted) return;
       setState(() {
         _page = page;
@@ -47,16 +47,6 @@ class _PageCropScreenState extends ConsumerState<PageCropScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
-  }
-
-  /// Lee solo la cabecera del JPEG para conocer su tamaño.
-  static Future<Size> _imageSize(String path) async {
-    final buffer = await ui.ImmutableBuffer.fromFilePath(path);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    final size = Size(descriptor.width.toDouble(), descriptor.height.toDouble());
-    descriptor.dispose();
-    buffer.dispose();
-    return size;
   }
 
   Future<void> _save() async {

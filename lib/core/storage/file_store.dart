@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 /// <root>/pages/<pageUuid>/original.jpg
 ///                          processed_r<rev>.jpg
 ///                          thumb_r<rev>.jpg
+///                          side<i>_r<rev>.jpg  lados de una identificación
 /// <cache>/capture/<uuid>.jpg      fotos de la sesión de escaneo
 /// <cache>/exports/*.pdf           PDFs generados para compartir
 /// ```
@@ -25,6 +26,8 @@ class FileStore {
   String pageDirRel(String pageUuid) => p.join(_pagesDir, pageUuid);
   String originalRel(String pageUuid) => p.join(pageDirRel(pageUuid), 'original.jpg');
   String processedRel(String pageUuid, int revision) => p.join(pageDirRel(pageUuid), 'processed_r$revision.jpg');
+  String sideRel(String pageUuid, int index, int revision) =>
+      p.join(pageDirRel(pageUuid), 'side${index}_r$revision.jpg');
   String thumbRel(String pageUuid, int revision) => p.join(pageDirRel(pageUuid), 'thumb_r$revision.jpg');
 
   Directory get captureDir => Directory(p.join(cache.path, 'capture'));
